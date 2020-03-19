@@ -15,17 +15,24 @@ Install dependencies if needed: pip install -r requirements.txt
 ### To reproduce the results published in the paper run the code in the command line using following commands: ###
 
 Train language model on the computer science domain articles:<br/>
-python train_and_eval.py --config_id 5_lm+bpe+rnn_science --lm_corpus_file data_science.json --bpe_model_path bpe/bpe_science.model --adaptive --bpe --cuda
+```
+python train_and_eval.py --config_id 5_lm+bpe+rnn_science --lm_corpus_file data_science.json --bpe_model_path bpe/bpe_science.model --adaptive --rnn --bpe --cuda
+```
 
 Train language model on the news articles:<br/>
-python train_and_eval.py --config_id 5_lm+bpe+rnn_news --lm_corpus_file data_news.json --bpe_model_path bpe/bpe_news.model --adaptive --bpe --cuda
+```
+python train_and_eval.py --config_id 5_lm+bpe+rnn_news --lm_corpus_file data_news.json --bpe_model_path bpe/bpe_news.model --adaptive --rnn --bpe --cuda
+```
 
 Train and test the keyword tagger on the datasets from the computer science domain:<br/>
-python train_and_eval.py --config_id 5_lm+bpe+rnn_science --bpe_model_path bpe/bpe_science.model --datasets 'semeval;krapivin;nus;inspec;kp20k' --classification --transfer_learning --rnn --bpe --cuda
+```
+python train_and_eval.py --config_id 5_lm+bpe+rnn_science --bpe_model_path bpe/bpe_science.model --datasets 'kp20k;inspec;krapivin;nus;semeval' --classification --transfer_learning --rnn --bpe --cuda
+```
 
 Train and test the keyword tagger on the datasets from the news domain:<br/>
-python train_and_eval.py --config_id 5_lm+bpe+rnn_news --bpe_model_path bpe/bpe_news.model --datasets 'duc;kptimes;jptimes' --classification --transfer_learning --rnn --bpe --cuda
-
+```
+python train_and_eval.py --config_id 5_lm+bpe+rnn_news --bpe_model_path bpe/bpe_news.model --datasets 'kptimes;jptimes;duc' --classification --transfer_learning --rnn --bpe --cuda
+```
 
 ## Contributors to the code ##
 
