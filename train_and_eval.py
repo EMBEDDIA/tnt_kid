@@ -103,7 +103,8 @@ def run_model(args):
             print()
 
     if not args.transfer_learning:
-        assert os.path.exists(os.path.join(args.data_path, args.lm_corpus_file))
+        if not args.classification:
+            assert os.path.exists(os.path.join(args.data_path, args.lm_corpus_file))
         assert not os.path.exists(args.dict_path)
 
     print(args)
@@ -278,6 +279,8 @@ def train_test(df_train, df_valid, df_test, args, stemmer, sp, folder=None):
         model = TransformerModel(args)
     if args.cuda:
         model.cuda()
+    else:
+        model.cpu()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.max_step, eta_min=args.eta_min)
@@ -682,7 +685,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--cuda', action='store_true', help='If true, unconditional generation.')
 
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=2019)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument('--learning_rate', type=float, default=0.0003)
     parser.add_argument('--max_grad_norm', type=int, default=1)
