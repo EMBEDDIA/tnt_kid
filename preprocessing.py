@@ -117,10 +117,8 @@ class Corpus(object):
             self.tokenize_df(df_test)
             self.dictionary.sort_words(unk=self.unk, pos_tags=self.pos_tags)
 
-            if not self.transfer_learning:
-
-                with open(args.dict_path, 'wb') as file:
-                    pickle.dump(self.dictionary, file)
+            with open(args.dict_path, 'wb') as file:
+                pickle.dump(self.dictionary, file)
 
         if not self.classification:
             if self.pos:
@@ -392,11 +390,7 @@ class Corpus(object):
 
         l = sorted(not_in_text.items(), key=lambda x: x[1], reverse=True)
         print('Num. keywords that do not appear inside text: ', len(l))
-        #print('Most common out of text kw: ', l[:100])
-        #print('Max kw length: ', max_lkw)
 
-
-        #print('X Y size: ', x.size(), y.size())
         if self.pos:
             return x, x_pos, y, all_keywords, stemmed_string
         return x, y, all_keywords, stemmed_string

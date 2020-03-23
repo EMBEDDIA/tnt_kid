@@ -116,13 +116,6 @@ def run_model(args):
     if args.cuda:
         torch.cuda.manual_seed(args.seed)
 
-    if args.classification:
-        result_file = open(os.path.join(args.result_path, 'classification_results.txt'), 'a', encoding='utf8')
-        result_file.write("Classification results for config " + args.config_id + ":\n\n")
-        result_file.write("Parameters:\n")
-        result_file.write(str(args) + '\n------------------------------------------------\n')
-
-
     if not args.classification:
         df_data = file_to_df(os.path.join(args.data_path, args.lm_corpus_file), classification=False)
         df_data = df_data.sample(frac=1, random_state=2019)
@@ -138,7 +131,13 @@ def run_model(args):
         print('------------------------------------------------------------------------------------------------------')
         print()
         train_test(df_train, df_valid, df_test, args, stemmer, sp)
+
     else:
+        result_file = open(os.path.join(args.result_path, 'classification_results.txt'), 'a', encoding='utf8')
+        result_file.write("Classification results for config " + args.config_id + ":\n\n")
+        result_file.write("Parameters:\n")
+        result_file.write(str(args) + '\n------------------------------------------------\n')
+
         for folder in args.datasets.split(';'):
 
             print('------------------------------------------------------------------------------------------------------')
@@ -209,12 +208,10 @@ def run_model(args):
             df_preds = pd.DataFrame(outputs, columns=['Predicted', 'True'])
             df_preds.to_csv(os.path.join(args.result_path, 'predictions', folder + '.csv'), sep=',', encoding='utf8')
 
-    if args.classification:
         result_file.write("\n-----------------------------------------------------------\n")
         result_file.write("\n-----------------------End of the run----------------------\n")
         result_file.write("\n-----------------------------------------------------------\n")
         result_file.close()
-
 
 
 
@@ -376,18 +373,12 @@ def train_test(df_train, df_valid, df_test, args, stemmer, sp, folder=None):
         total_loss, total_seq, total_pred, total_true = test(model, val_data, val_pos, val_target, corpus, args, stemmer, valid_keywords, sp)
         total_loss = total_loss/total_seq
 
-        if args.classification:
-            print('Validating on ', folder)
-            p_5, r_5, f_5, p_10, r_10, f_10, p_k, r_k, f_k, p_M, r_M, f_M = eval(total_pred, total_true)
-            score = str(total_loss)
-
-        else:
+        if not args.classification:
             perplexity = math.exp(total_loss)
             score = str(perplexity)[:6]
             print("Validation loss: ", total_loss)
             print("Validation set perplexity: ", perplexity)
 
-        if not args.classification:
             if  total_loss < best_loss:
                 path = os.path.join(args.trained_language_models_dir, "model_" + args.config_id + "_perp_" + score + "_epoch_" + str(epoch + 1) + ".pt")
                 with open(path, 'wb') as f:
@@ -402,6 +393,10 @@ def train_test(df_train, df_valid, df_test, args, stemmer, sp, folder=None):
                 best_model_path = path
                 best_loss = total_loss
         else:
+            print('Validating on ', folder)
+            p_5, r_5, f_5, p_10, r_10, f_10, p_k, r_k, f_k, p_M, r_M, f_M = eval(total_pred, total_true)
+            score = str(total_loss)
+
             if f_10 > best_f:
                 path = os.path.join(args.trained_classification_models_dir, "model_" + args.config_id + "_folder_" + folder +  "_loss_" + score + "_epoch_" + str(epoch + 1) + ".pt")
                 with open(path, 'wb') as f:
@@ -493,9 +488,6 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
 
 
             input_batch_labels = batch_labels.clone()
-
-            flat_indexed_words = encoder_words.contiguous().view(-1)
-
 
             if not args.classification:
                 loss, logits = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, masked_idx=mask, test=True)
