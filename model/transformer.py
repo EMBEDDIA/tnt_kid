@@ -123,7 +123,6 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
         if proj is None:
             logit = F.linear(hidden, weight, bias=bias)
         else:
-
             proj_hid = F.linear(hidden, proj.t().contiguous())
             logit = F.linear(proj_hid, weight, bias=bias)
 
@@ -189,14 +188,12 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
 
                 if i == 0:
                     logprob_i = head_logprob_i.gather(1, target_i[:,None]).squeeze(1)
-
                 else:
                     weight_i, bias_i, proj_i = weights[i], biases[i], self.out_projs[i]
 
                     hidden_i = hidden.index_select(0, indices_i)
 
                     tail_logit_i = self._compute_logit(hidden_i, weight_i, bias_i, proj_i)
-
                     tail_logprob_i = F.log_softmax(tail_logit_i, dim=1)
 
                     logprob_i = head_logprob_i[:, -i] \
@@ -207,11 +204,9 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
                 else:
                     nll[offset:offset+logprob_i.size(0)].copy_(-logprob_i)
 
-
                 offset += logprob_i.size(0)
 
         return nll
-
 
 
 class PositionalEmbedding(nn.Module):
@@ -226,9 +221,7 @@ class PositionalEmbedding(nn.Module):
     def forward(self, pos_seq, bsz=None):
         sinusoid_inp = torch.ger(pos_seq, self.inv_freq)
         pos_emb = torch.cat([sinusoid_inp.sin(), sinusoid_inp.cos()], dim=-1)
-
         return pos_emb[None,:,:].expand(bsz, -1, -1).contiguous()
-
 
 
 def gelu(x):
@@ -253,7 +246,6 @@ class Conv1D(nn.Module):
 
 class LayerNorm(nn.Module):
     def __init__(self, hidden_size, eps=1e-12):
-
         super(LayerNorm, self).__init__()
         self.weight = nn.Parameter(torch.ones(hidden_size))
         self.bias = nn.Parameter(torch.zeros(hidden_size))
@@ -271,7 +263,6 @@ class Attention(nn.Module):
     def __init__(self, nx, n_ctx, config, scale=False):
         super(Attention, self).__init__()
         n_state = nx
-
         assert n_state % config.n_head == 0
         self.register_buffer("bias", torch.tril(torch.ones(n_ctx, n_ctx)).view(1, 1, n_ctx, n_ctx))
         self.n_head = config.n_head
@@ -324,7 +315,6 @@ class Attention(nn.Module):
         return a, att
 
 
-
 class MLP(nn.Module):
     def __init__(self, n_state, config):
         super(MLP, self).__init__()
@@ -363,7 +353,6 @@ class EncodingBlock(nn.Module):
 
 
         a, att = self.attn(query, key, value, key_r)
-        #print(a.size(), x.size())
         x = x + a
         m = self.ln_2(x)
         m = self.mlp(m)
@@ -373,7 +362,6 @@ class EncodingBlock(nn.Module):
 
 
 class TransformerHead(nn.Module):
-    """ Language Model Head for the transformer """
 
     def __init__(self, model_embeddings, config):
         super(TransformerHead, self).__init__()
@@ -434,7 +422,7 @@ class TransformerHead(nn.Module):
 
 
 
-    def forward(self, hidden_state, target, embeddings, masked_idx, test=False):
+    def forward(self, hidden_state, target, embeddings, masked_idx, test=False, predict=False):
 
         if self.classification:
 
@@ -447,12 +435,12 @@ class TransformerHead(nn.Module):
                 hidden_state = hidden_state + lstm_out
 
             logits = self.decoder(self.dropout(self.relu(hidden_state)))
+            if predict:
+                return logits
 
             active_loss = target.contiguous().view(-1) > 0
             active_logits = logits.contiguous().view(-1, logits.size(-1)).squeeze(1)[active_loss]
-
             active_targets = target.contiguous().view(-1) - 1
-
             active_targets = active_targets[active_loss]
 
             binary_targets = active_targets.clone()
@@ -467,7 +455,6 @@ class TransformerHead(nn.Module):
             return loss
 
         else:
-
             if self.adaptive_softmax:
                 if test:
                     logits = self.dropout(self.decoder(hidden_state))
@@ -530,7 +517,7 @@ class TransformerModel(nn.Module):
             module.bias.data.zero_()
 
 
-    def forward(self, input_ids, input_pos=None, lm_labels=None, masked_idx=None, test=False):
+    def forward(self, input_ids, input_pos=None, lm_labels=None, embeddings=None, masked_idx=None, test=False, predict=False):
 
         input_ids = input_ids.view(-1, input_ids.size(-1))
         inputs_embeds = self.wte(input_ids)
@@ -551,6 +538,10 @@ class TransformerModel(nn.Module):
             hidden_states, att = block(hidden_states, pos_emb)
 
         hidden_states = self.ln_f(hidden_states)
+
+        if predict and self.config.classification:
+            logits = self.head(hidden_states, lm_labels, inputs_embeds, masked_idx, predict=predict)
+            return logits
 
         if test:
             if self.config.classification:

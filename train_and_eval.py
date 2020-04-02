@@ -492,7 +492,7 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
             if not args.classification:
                 loss, logits = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, masked_idx=mask, test=True)
             else:
-                loss, logits, att_vector = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, test=True)
+                loss, logits, att_matrices = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, test=True)
 
             loss = loss.mean()
             total_loss += batch_labels.size(0) * loss.float().item()
@@ -531,8 +531,6 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
                     pred_vector = []
                     probs_dict = {}
 
-                    att_words = []
-
                     while position < len(batch):
                         pred = batch[position]
 
@@ -542,17 +540,11 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
 
                         pred_vector.append(pred)
                         pred_word = []
-                        att_word = corpus.dictionary.idx2word[encoder_words[batch_counter][position]]
-                        att_words.append(att_word)
-
 
                         if idx == 1:
                             words = []
                             num_steps = length - position
                             for j in range(num_steps):
-                                if j != 0:
-                                    att_word = corpus.dictionary.idx2word[encoder_words[batch_counter][position + j]]
-                                    att_words.append(att_word)
 
                                 new_pred = batch[position + j]
 
