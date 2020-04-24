@@ -561,21 +561,13 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
                                     if sp is not None:
                                         word = corpus.dictionary.idx2word[encoder_words[batch_counter][position + j]]
                                         if not word.startswith('▁'):
-                                            words.append((word, prob))
-
-                                            # add max word prob in document to prob dictionary
-                                            stem = stemmer.stem(word)
-                                            if stem not in probs_dict:
-                                                probs_dict[stem] = prob
-                                            else:
-                                                if probs_dict[stem] < prob:
-                                                    probs_dict[stem] = prob
+                                            words = []
                                     break
 
                             position += j + 1
                             words = [x[0] for x in words]
                             if sp is not None:
-                                if words[0].startswith('▁'):
+                                if len(words) > 0 and words[0].startswith('▁'):
                                     pred_example.append(words)
                             else:
                                 pred_example.append(words)
