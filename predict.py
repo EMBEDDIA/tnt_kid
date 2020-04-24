@@ -130,14 +130,10 @@ def predict(test_data, model, stemmer, sp):
 
             for batch in logits:
 
-                pred_save = []
-
                 pred_example = []
                 batch = F.softmax(batch, dim=1)
                 length = batch.size(0)
                 position = 0
-
-                pred_vector = []
                 probs_dict = {}
 
                 while position < len(batch):
@@ -145,9 +141,6 @@ def predict(test_data, model, stemmer, sp):
 
                     _, idx = pred.max(0)
                     idx = idx.item()
-
-                    pred_vector.append(pred)
-                    pred_word = []
 
                     if idx == 1:
                         words = []
@@ -161,7 +154,6 @@ def predict(test_data, model, stemmer, sp):
                             if new_idx == 1:
                                 word = corpus.dictionary.idx2word[encoder_words[batch_counter][position + j]]
                                 words.append((word, prob))
-                                pred_word.append((word, prob))
 
                                 # add max word prob in document to prob dictionary
                                 stem = stemmer.stem(word)
@@ -172,13 +164,27 @@ def predict(test_data, model, stemmer, sp):
                                     if probs_dict[stem] < prob:
                                         probs_dict[stem] = prob
                             else:
+                                if sp is not None:
+                                    word = corpus.dictionary.idx2word[encoder_words[batch_counter][position + j]]
+                                    if not word.startswith('▁'):
+                                        words.append((word, prob))
+
+                                        # add max word prob in document to prob dictionary
+                                        stem = stemmer.stem(word)
+                                        if stem not in probs_dict:
+                                            probs_dict[stem] = prob
+                                        else:
+                                            if probs_dict[stem] < prob:
+                                                probs_dict[stem] = prob
                                 break
 
                         position += j + 1
                         words = [x[0] for x in words]
-
-                        pred_save.append(pred_word)
-                        pred_example.append(words)
+                        if sp is not None:
+                            if words[0].startswith('▁'):
+                                pred_example.append(words)
+                        else:
+                            pred_example.append(words)
                     else:
                         position += 1
 

@@ -471,9 +471,6 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
 
     with torch.no_grad():
 
-        all_predicted_save = []
-        all_true_save = []
-
         for i in range(0, all_steps - cut, step):
 
             if not args.classification:
@@ -516,19 +513,15 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
                     true_example = keywords[key]
                     true_example = [" ".join(kw) for kw in true_example]
                     true_y.append(true_example)
-                    all_true_save.append(true_example)
 
                 batch_counter = 0
                 for batch in logits:
-
-                    pred_save = []
 
                     pred_example = []
                     batch = F.softmax(batch, dim=1)
                     length = batch.size(0)
                     position = 0
 
-                    pred_vector = []
                     probs_dict = {}
 
                     while position < len(batch):
@@ -538,7 +531,6 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
                         _ , idx = pred.max(0)
                         idx = idx.item()
 
-                        pred_vector.append(pred)
                         pred_word = []
 
                         if idx == 1:
@@ -566,18 +558,29 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
                                         if probs_dict[stem] < prob:
                                             probs_dict[stem] = prob
                                 else:
+                                    if sp is not None:
+                                        word = corpus.dictionary.idx2word[encoder_words[batch_counter][position + j]]
+                                        if not word.startswith('▁'):
+                                            words.append((word, prob))
+
+                                            # add max word prob in document to prob dictionary
+                                            stem = stemmer.stem(word)
+                                            if stem not in probs_dict:
+                                                probs_dict[stem] = prob
+                                            else:
+                                                if probs_dict[stem] < prob:
+                                                    probs_dict[stem] = prob
                                     break
 
                             position += j + 1
                             words = [x[0] for x in words]
-
-                            pred_save.append(pred_word)
-                            pred_example.append(words)
+                            if sp is not None:
+                                if words[0].startswith('▁'):
+                                    pred_example.append(words)
+                            else:
+                                pred_example.append(words)
                         else:
                             position += 1
-
-                    all_predicted_save.append(pred_save)
-
 
                     #assign probabilities
                     pred_examples_with_probs = []
