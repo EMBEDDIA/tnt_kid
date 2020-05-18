@@ -9,6 +9,7 @@ Matej Martinc, Blaz Skrlj and Senja Pollak. TNT-KID: Transformer-based Neural Ta
 
 Published results were produced in Python 3 programming environment on Linux Mint 18 Cinnamon operating system. Instructions for installation assume the usage of PyPI package manager.<br/>
 To get the source code and the train and test data, clone the project from the repository with 'git clone https://gitlab.com/matej.martinc/tnt_kid'<br/>
+To only get the source code, clone the repository from github with 'git clone https://github.com/EMBEDDIA/tnt_kid'<br/>
 
 Install dependencies if needed: pip install -r requirements.txt
 
