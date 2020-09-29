@@ -728,7 +728,7 @@ if __name__ == '__main__':
     parser.add_argument('--POS_tags', action='store_true', help='If true, use additional POS tag sequence input')
     parser.add_argument('--classification', action='store_true', help='If true, train a classifier.')
     parser.add_argument('--rnn', action='store_true', help='If true, use a RNN with attention in classification head.')
-    parser.add_argument('--crf', action='store_true', help='If true, use CRF instead of costum loss function in classification head.')
+    parser.add_argument('--crf', action='store_true', help='If true, use a BiLSTM-CRF token classification head.')
 
     args = parser.parse_args()
 

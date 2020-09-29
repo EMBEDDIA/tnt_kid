@@ -17,7 +17,7 @@ Install dependencies if needed: pip install -r requirements.txt
 
 Generate news and science datasets for language model training:<br/>
 ```
-python data/build_dataset.py
+python data/build_dataset.py --datasets data --data_path data
 ```
 
 Train language model on the computer science domain articles:<br/>
