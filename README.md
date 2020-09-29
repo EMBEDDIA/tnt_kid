@@ -15,6 +15,11 @@ Install dependencies if needed: pip install -r requirements.txt
 
 ### To reproduce the results published in the paper run the code in the command line using following commands: ###
 
+Generate news and science datasets for language model training:<br/>
+```
+python data/build_dataset.py
+```
+
 Train language model on the computer science domain articles:<br/>
 ```
 python train_and_eval.py --config_id 5_lm+bpe+rnn_science --lm_corpus_file data_science.json --bpe_model_path bpe/bpe_science.model --adaptive --rnn --bpe --cuda

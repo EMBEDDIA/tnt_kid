@@ -51,6 +51,10 @@ def run_model(args):
             drnn = 'rnn'
         else:
             drnn = 'nornn'
+        if args.crf:
+            dcrf = 'crf'
+        else:
+            dcrf = 'nocrf'
         if args.adaptive:
             dadaptive = 'adaptive'
         else:
@@ -77,9 +81,9 @@ def run_model(args):
             sys.exit()
         else:
             if not args.classification:
-                dict_path = os.path.join(args.dict_folder, args.config_id + '_' + dadaptive + '_' + dmasked_lm + '_' + dbpe + '_' + dpos + '_' + drnn + '.ptb')
+                dict_path = os.path.join(args.dict_folder, args.config_id + '_' + dadaptive + '_' + dmasked_lm + '_' + dbpe + '_' + dpos + '_' + drnn + '_' + dcrf + '.ptb')
             else:
-                dict_path = os.path.join(args.dict_folder, args.config_id + '_nolm_' + dbpe + '_' + dpos + '_' + drnn + '.ptb')
+                dict_path = os.path.join(args.dict_folder, args.config_id + '_nolm_' + dbpe + '_' + dpos + '_' + drnn + '_' + dcrf + '.ptb')
 
     args.dict_path = dict_path
 
@@ -89,6 +93,11 @@ def run_model(args):
         sp.Load(args.bpe_model_path)
     else:
         sp = None
+
+    if args.crf:
+        assert not args.rnn
+    if args.rnn:
+        assert not args.crf
 
     if args.classification:
         assert args.datasets is not None
@@ -332,8 +341,6 @@ def train_test(df_train, df_valid, df_test, args, stemmer, sp, folder=None):
 
             loss = model(encoder_words, input_pos=encoder_pos, lm_labels=batch_labels, masked_idx=mask)
             loss = loss.float().mean().type_as(loss)
-
-
             loss.backward()
 
             # `clip_grad_norm`
@@ -450,6 +457,7 @@ def train_test(df_train, df_valid, df_test, args, stemmer, sp, folder=None):
 
 
 def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp=None):
+    # testing
 
     total_pred = []
     total_true = []
@@ -471,6 +479,9 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
 
     with torch.no_grad():
 
+        all_predicted_save = []
+        all_true_save = []
+
         for i in range(0, all_steps - cut, step):
 
             if not args.classification:
@@ -478,18 +489,21 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
                 if args.POS_tags:
                     encoder_pos, _, _ = get_batch(data_pos, i, args, corpus.dictionary.word2idx, mask)
             else:
-                encoder_words, batch_labels = get_batch_docs(data, target, i, args)
+                encoder_words, batch_labels = get_batch_docs(data, target, i)
                 if args.POS_tags:
-                    encoder_pos, _ = get_batch_docs(data_pos, target, i, args)
+                    encoder_pos, _ = get_batch_docs(data_pos, target, i)
                 mask = None
 
 
             input_batch_labels = batch_labels.clone()
 
             if not args.classification:
-                loss, logits = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, masked_idx=mask, test=True)
+                loss, logits = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, embeddings=None, masked_idx=mask, test=True)
             else:
-                loss, logits, att_matrices = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, test=True)
+                if not args.crf:
+                    loss, logits, att_vector = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, embeddings=None, test=True)
+                else:
+                    loss, logits, crf_preds, att_vector = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, embeddings=None, test=True)
 
             loss = loss.mean()
             total_loss += batch_labels.size(0) * loss.float().item()
@@ -513,43 +527,49 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
                     true_example = keywords[key]
                     true_example = [" ".join(kw) for kw in true_example]
                     true_y.append(true_example)
+                    all_true_save.append(true_example)
 
                 batch_counter = 0
-                for batch in logits:
+                for batch_idx, batch in enumerate(logits):
+
+                    pred_save = []
 
                     pred_example = []
                     batch = F.softmax(batch, dim=1)
                     length = batch.size(0)
                     position = 0
 
+                    pred_vector = []
                     probs_dict = {}
 
                     while position < len(batch):
                         pred = batch[position]
+                        if not args.crf:
+                            _ , idx = pred.max(0)
+                            idx = idx.item()
+                        else:
+                            idx = crf_preds[batch_idx][position]
 
-
-                        _ , idx = pred.max(0)
-                        idx = idx.item()
-
+                        pred_vector.append(pred)
                         pred_word = []
 
                         if idx == 1:
                             words = []
                             num_steps = length - position
                             for j in range(num_steps):
-
                                 new_pred = batch[position + j]
-
                                 values, new_idx = new_pred.max(0)
-                                new_idx = new_idx.item()
+
+                                if not args.crf:
+                                    new_idx = new_idx.item()
+                                else:
+                                    new_idx = crf_preds[batch_idx][position + j]
                                 prob = values.item()
 
                                 if new_idx == 1:
                                     word = corpus.dictionary.idx2word[encoder_words[batch_counter][position + j]]
                                     words.append((word, prob))
                                     pred_word.append((word, prob))
-
-                                    #add max word prob in document to prob dictionary
                                     stem = stemmer.stem(word)
 
                                     if stem not in probs_dict:
@@ -561,18 +581,30 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
                                     if sp is not None:
                                         word = corpus.dictionary.idx2word[encoder_words[batch_counter][position + j]]
                                         if not word.startswith('▁'):
-                                            words = []
+                                            words.append((word, prob))
+
+                                            stem = stemmer.stem(word)
+                                            if stem not in probs_dict:
+                                                probs_dict[stem] = prob
+                                            else:
+                                                if probs_dict[stem] < prob:
+                                                    probs_dict[stem] = prob
                                     break
 
                             position += j + 1
                             words = [x[0] for x in words]
                             if sp is not None:
-                                if len(words) > 0 and words[0].startswith('▁'):
+                                if words[0].startswith('▁'):
                                     pred_example.append(words)
+                                    pred_save.append(pred_word)
                             else:
                                 pred_example.append(words)
+                                pred_save.append(pred_word)
                         else:
                             position += 1
+
+                    all_predicted_save.append(pred_save)
+
 
                     #assign probabilities
                     pred_examples_with_probs = []
@@ -607,8 +639,13 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
                                 if punct in kw:
                                     has_punct = True
                                     break
-                            if not has_punct and len(kw.split()) < 5:
-                                filtered_pred_example.append((kw, prob))
+                            if sp is not None:
+                                kw_decoded = sp.DecodePieces(kw.split())
+                                if not has_punct and len(kw_decoded.split()) < 5:
+                                    filtered_pred_example.append((kw, prob))
+                            else:
+                                if not has_punct and len(kw.split()) < 5:
+                                    filtered_pred_example.append((kw, prob))
                         all_kw.add(kw_stem)
 
                     pred_example = filtered_pred_example
@@ -691,6 +728,7 @@ if __name__ == '__main__':
     parser.add_argument('--POS_tags', action='store_true', help='If true, use additional POS tag sequence input')
     parser.add_argument('--classification', action='store_true', help='If true, train a classifier.')
     parser.add_argument('--rnn', action='store_true', help='If true, use a RNN with attention in classification head.')
+    parser.add_argument('--crf', action='store_true', help='If true, use CRF instead of costum loss function in classification head.')
 
     args = parser.parse_args()
 

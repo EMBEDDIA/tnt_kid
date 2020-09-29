@@ -4,9 +4,6 @@
 *.npz
 *.pyc
 .idea
-trained_language_models
-trained_classification_models
-dictionaries
 results
 
 

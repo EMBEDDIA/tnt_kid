@@ -6,7 +6,6 @@ import sentencepiece as spm
 import json
 from nltk import sent_tokenize, word_tokenize
 import torch.nn.functional as F
-from estnltk import Vabamorf
 from nltk.stem.porter import *
 
 
@@ -214,8 +213,13 @@ def predict(test_data, model, stemmer, sp):
                             if punct in kw:
                                 has_punct = True
                                 break
-                        if not has_punct and len(kw.split()) < 5:
-                            filtered_pred_example.append((kw, prob))
+                        if sp is not None:
+                            kw_decoded = sp.DecodePieces(kw.split())
+                            if not has_punct and len(kw_decoded.split()) < 5:
+                                filtered_pred_example.append((kw, prob))
+                        else:
+                            if not has_punct and len(kw.split()) < 5:
+                                filtered_pred_example.append((kw, prob))
                     all_kw.add(kw_stem)
 
                 pred_example = filtered_pred_example
@@ -267,7 +271,7 @@ if __name__ == '__main__':
     parser.add_argument('--POS_tags', action='store_true', help='If true, use additional POS tag sequence input')
     parser.add_argument('--classification', action='store_true', help='If true, train a classifier.')
     parser.add_argument('--rnn', action='store_true', help='If true, use a RNN with attention in classification head.')
-
+    parser.add_argument('--crf', action='store_true', help='If true, use a BiLSTM-CRF token classification head.')
     args = parser.parse_args()
 
     df_test = file_to_df(args.data_path)

@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 import torch.nn.functional as F
 from torch.autograd import Variable
+from torchcrf import CRF
 
 
 class CustomNLLLoss(torch.nn.Module):
@@ -21,20 +22,64 @@ class CustomNLLLoss(torch.nn.Module):
 
             if current == 1:
                 ones.append(logs[i][targets[i]])
-                
+
             elif current == 0:
                 zeros.append(logs[i][targets[i]])
 
         if len(ones) > 0:
-            r = -sum(ones)/len(ones)
+            r = -sum(ones) / len(ones)
         else:
             r = 0
         if len(zeros) > 0:
-            p = -sum(zeros)/len(zeros)
+            p = -sum(zeros) / len(zeros)
         else:
             p = 0
 
         return p + r
+
+
+class BiLSTM_CRF(nn.Module):
+
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, config):
+        super(BiLSTM_CRF, self).__init__()
+        self.config = config
+        self.embedding_dim = embedding_dim
+        self.hidden_dim = hidden_dim
+        self.vocab_size = vocab_size
+        self.lstm = nn.LSTM(embedding_dim, hidden_dim,
+                            num_layers=1, bidirectional=True)
+        self.NUM_TAGS = 2
+
+        self.crf = CRF(self.NUM_TAGS)
+        self.hidden2tag = nn.Linear(hidden_dim, self.NUM_TAGS)
+
+    def init_hidden(self, batch_size):
+        if not self.config.cuda:
+            return (torch.randn(2, batch_size, self.hidden_dim),
+                    torch.randn(2, batch_size, self.hidden_dim))
+        else:
+            return (torch.randn(2, batch_size, self.hidden_dim).cuda(),
+                    torch.randn(2, batch_size, self.hidden_dim).cuda())
+
+    def _get_lstm_features(self, embeds):
+        self.hidden = self.init_hidden(embeds.size(0))
+        embeds = embeds.permute(1, 0, 2)
+        lstm_out, self.lstm_hidden = self.lstm(embeds, self.hidden)
+        lstm_out = (lstm_out[:, :, :self.embedding_dim] + lstm_out[:, :, self.embedding_dim:])
+        lstm_out = lstm_out.permute(1, 0, 2)
+        embeds = embeds.permute(1, 0, 2)
+        lstm_feats = self.hidden2tag(embeds + lstm_out)
+        return lstm_feats
+
+    def neg_log_likelihood(self, embeds, tags, mask=None):
+        feats = self._get_lstm_features(embeds)
+        feats = feats.permute(1, 0, 2)
+        return -self.crf(feats, tags, mask=mask)
+
+    def forward(self, embeds):
+        lstm_feats = self._get_lstm_features(embeds)
+        lstm_feats = lstm_feats.permute(1, 0, 2)
+        return lstm_feats, self.crf.decode(lstm_feats)
 
 
 class AdaptiveEmbedding(nn.Module):
@@ -60,13 +105,11 @@ class AdaptiveEmbedding(nn.Module):
         if d_proj != d_embed:
             self.emb_projs.append(nn.Parameter(torch.Tensor(d_proj, d_embed)))
 
-
     def forward(self, inp):
         embed = self.emb_layers[0](inp)
         embed.mul_(self.emb_scale)
 
         return embed
-
 
 
 class ProjectedAdaptiveLogSoftmax(nn.Module):
@@ -85,7 +128,6 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
         self.shortlist_size = self.cutoffs[0]
         self.n_clusters = len(self.cutoffs) - 1
         self.head_size = self.shortlist_size + self.n_clusters
-
 
         self.relu = torch.nn.ReLU()
 
@@ -108,14 +150,14 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
             self.out_layers.append(nn.Linear(d_embed, n_token))
         else:
             for i in range(len(self.cutoffs)):
-                l_idx, r_idx = self.cutoff_ends[i], self.cutoff_ends[i+1]
+                l_idx, r_idx = self.cutoff_ends[i], self.cutoff_ends[i + 1]
                 d_emb_i = d_embed // (div_val ** i)
 
                 self.out_projs.append(
                     nn.Parameter(torch.Tensor(d_proj, d_emb_i))
                 )
 
-                self.out_layers.append(nn.Linear(d_emb_i, r_idx-l_idx))
+                self.out_layers.append(nn.Linear(d_emb_i, r_idx - l_idx))
 
         self.keep_order = keep_order
 
@@ -129,17 +171,20 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
         return logit
 
     def forward(self, hidden, target, keep_order=False):
+        '''
+            hidden :: [len*bsz x d_proj]
+            target :: [len*bsz]
+        '''
 
         if hidden.size(0) != target.size(0):
             raise RuntimeError('Input and target should have the same size '
                                'in the batch dimension.')
 
-
         if self.n_clusters == 0:
             logit = self._compute_logit(hidden, self.out_layers[0].weight,
                                         self.out_layers[0].bias, self.out_projs[0])
             nll = -F.log_softmax(logit, dim=-1) \
-                    .gather(1, target.unsqueeze(1)).squeeze(1)
+                .gather(1, target.unsqueeze(1)).squeeze(1)
 
         else:
             # construct weights and biases
@@ -167,9 +212,8 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
             head_logit = self._compute_logit(hidden, head_weight, head_bias, head_proj)
             head_logprob = F.log_softmax(head_logit, dim=1)
 
-
             nll = torch.zeros_like(target,
-                    dtype=hidden.dtype, device=hidden.device)
+                                   dtype=hidden.dtype, device=hidden.device)
 
             offset = 0
             cutoff_values = [0] + self.cutoffs
@@ -185,9 +229,8 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
                 target_i = target.index_select(0, indices_i) - l_idx
                 head_logprob_i = head_logprob.index_select(0, indices_i)
 
-
                 if i == 0:
-                    logprob_i = head_logprob_i.gather(1, target_i[:,None]).squeeze(1)
+                    logprob_i = head_logprob_i.gather(1, target_i[:, None]).squeeze(1)
                 else:
                     weight_i, bias_i, proj_i = weights[i], biases[i], self.out_projs[i]
 
@@ -197,12 +240,12 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
                     tail_logprob_i = F.log_softmax(tail_logit_i, dim=1)
 
                     logprob_i = head_logprob_i[:, -i] \
-                              + tail_logprob_i.gather(1, target_i[:,None]).squeeze(1)
+                                + tail_logprob_i.gather(1, target_i[:, None]).squeeze(1)
 
                 if (hasattr(self, 'keep_order') and self.keep_order) or keep_order:
                     nll.index_copy_(0, indices_i, -logprob_i)
                 else:
-                    nll[offset:offset+logprob_i.size(0)].copy_(-logprob_i)
+                    nll[offset:offset + logprob_i.size(0)].copy_(-logprob_i)
 
                 offset += logprob_i.size(0)
 
@@ -221,7 +264,8 @@ class PositionalEmbedding(nn.Module):
     def forward(self, pos_seq, bsz=None):
         sinusoid_inp = torch.ger(pos_seq, self.inv_freq)
         pos_emb = torch.cat([sinusoid_inp.sin(), sinusoid_inp.cos()], dim=-1)
-        return pos_emb[None,:,:].expand(bsz, -1, -1).contiguous()
+
+        return pos_emb[None, :, :].expand(bsz, -1, -1).contiguous()
 
 
 def gelu(x):
@@ -256,7 +300,6 @@ class LayerNorm(nn.Module):
         s = (x - u).pow(2).mean(-1, keepdim=True)
         x = (x - u) / torch.sqrt(s + self.variance_epsilon)
         return self.weight * x + self.bias
-    
 
 
 class Attention(nn.Module):
@@ -270,7 +313,7 @@ class Attention(nn.Module):
         self.c_proj = Conv1D(n_state, nx)
         self.d_proj = Conv1D(n_state, 4)
         self.n_ctx = config.n_ctx
-        self.v = nn.Linear(config.n_ctx, config.n_embd//config.n_head, bias=False)
+        self.v = nn.Linear(config.n_ctx, config.n_embd // config.n_head, bias=False)
         self.dropout = nn.Dropout(0.3)
         self.masked_lm = config.masked_lm
 
@@ -281,10 +324,10 @@ class Attention(nn.Module):
 
         w = w / math.sqrt(v.size(-1))
 
-        #add mask if not masked lm
+        # add mask if not masked lm
         if not self.masked_lm:
             nd, ns = w.size(-2), w.size(-1)
-            b = self.bias[:, :, ns-nd:ns, :ns]
+            b = self.bias[:, :, ns - nd:ns, :ns]
             w = w * b + -1e10 * (1 - b)
         w = nn.Softmax(dim=-1)(w)
 
@@ -299,13 +342,13 @@ class Attention(nn.Module):
         new_x_shape = x.size()[:-1] + (self.n_head, x.size(-1) // self.n_head)
         x = x.view(*new_x_shape)
         if k:
-            return x.permute(0, 2, 3, 1)  # (batch, head, head_features, seq_length)
+            return x.permute(0, 2, 3, 1)
         else:
-            return x.permute(0, 2, 1, 3)  # (batch, head, seq_length, head_features)
+            return x.permute(0, 2, 1, 3)
 
     def forward(self, query, key, value, key_r):
         query = self.split_heads(query)
-        query= query[:, :, -self.n_ctx:, :]
+        query = query[:, :, -self.n_ctx:, :]
         key = self.split_heads(key, k=True)
         key_r = self.split_heads(key_r, k=True)
         value = self.split_heads(value)
@@ -351,7 +394,6 @@ class EncodingBlock(nn.Module):
         enc_pos = self.r_attn(pos_emb)
         _, key_r, _ = enc_pos.split(self.split_size, dim=2)
 
-
         a, att = self.attn(query, key, value, key_r)
         x = x + a
         m = self.ln_2(x)
@@ -375,6 +417,7 @@ class TransformerHead(nn.Module):
         self.classification = config.classification
         self.masked_lm = config.masked_lm
         self.rnn = config.rnn
+        self.crf = config.crf
         self.config = config
 
         emb_weights = model_embeddings.emb_layers[0].weight
@@ -382,18 +425,21 @@ class TransformerHead(nn.Module):
 
         if self.classification:
             self.classification = True
-            self.loss_function =  CustomNLLLoss()
+            self.loss_function = CustomNLLLoss()
             self.decoder = nn.Linear(embed_shape[1], 2, bias=True)
             self.num_layers = 2
 
             if self.rnn:
-                self.lstm = nn.LSTM(embed_shape[1], embed_shape[1], dropout=0.3, num_layers=self.num_layers, bidirectional=True)
+                self.lstm = nn.LSTM(embed_shape[1], embed_shape[1], dropout=0.3, num_layers=self.num_layers,
+                                    bidirectional=True)
                 self.lstm_dropout = nn.Dropout(0.3)
+            elif self.crf:
+                self.crf = BiLSTM_CRF(config.vocab_size, config.n_embd, config.n_embd, config)
+
         else:
             self.loss_function = nn.CrossEntropyLoss()
             self.decoder = nn.Linear(embed_shape[1], embed_shape[0], bias=True)
-            self.decoder.weight = emb_weights  #Tied weights
-
+            self.decoder.weight = emb_weights  # Tied weights
 
         if self.adaptive_softmax:
 
@@ -410,7 +456,6 @@ class TransformerHead(nn.Module):
                     if tie_proj and self.div_val != 1:
                         self.crit.out_projs[i] = model_embeddings.emb_projs[i]
 
-
     def init_hidden(self, batch_size):
         if self.config.cuda:
             h0 = Variable(torch.zeros(2 * self.num_layers, batch_size, self.n_embd).cuda())
@@ -420,41 +465,63 @@ class TransformerHead(nn.Module):
             c0 = Variable(torch.zeros(2 * self.num_layers, batch_size, self.n_embd))
         return (h0, c0)
 
-
-
-    def forward(self, hidden_state, target, embeddings, masked_idx, test=False, predict=False):
+    def forward(self, hidden_state, target, masked_idx, test=False, predict=False):
 
         if self.classification:
+            if self.crf:
+                mask = target.clone()
+                mask[mask > 0] = 1
+                mask = mask.type(torch.uint8)
+                mask = mask.permute(1, 0)
+                target[target == 1] = 0
+                target[target > 1] = 1
+                target = target.permute(1, 0)
 
-            if self.rnn:
-                lstm_hidden = self.init_hidden(embeddings.size(0))
-                embeddings = self.lstm_dropout(embeddings).permute(1, 0, 2)
-                lstm_out, self.lstm_hidden = self.lstm(embeddings, lstm_hidden)
-                lstm_out = (lstm_out[:, :, :self.n_embd] + lstm_out[:, :, self.n_embd:])
-                lstm_out = lstm_out.permute(1,0,2)
-                hidden_state = hidden_state + lstm_out
+                if not test:
+                    loss = self.crf.neg_log_likelihood(hidden_state, target, mask=mask)
+                    return loss
+                elif predict:
+                    logits, predictions = self.crf(hidden_state)
+                    logits = logits.permute(1, 0, 2)
+                    return logits, predictions
+                elif test:
+                    loss = self.crf.neg_log_likelihood(hidden_state, target, mask=mask)
+                    logits, predictions = self.crf(hidden_state)
+                    logits = logits.permute(1, 0, 2)
+                    return loss, logits, predictions
+            else:
+                if self.rnn:
+                    lstm_hidden = self.init_hidden(hidden_state.size(0))
+                    embeddings = self.lstm_dropout(hidden_state).permute(1, 0, 2)
+                    lstm_out, self.lstm_hidden = self.lstm(embeddings, lstm_hidden)
+                    lstm_out = (lstm_out[:, :, :self.n_embd] + lstm_out[:, :, self.n_embd:])
+                    lstm_out = lstm_out.permute(1, 0, 2)
+                    hidden_state = hidden_state + lstm_out
 
-            logits = self.decoder(self.dropout(self.relu(hidden_state)))
-            if predict:
-                return logits
+                logits = self.decoder(self.dropout(self.relu(hidden_state)))
+                if predict:
+                    return logits
 
-            active_loss = target.contiguous().view(-1) > 0
-            active_logits = logits.contiguous().view(-1, logits.size(-1)).squeeze(1)[active_loss]
-            active_targets = target.contiguous().view(-1) - 1
-            active_targets = active_targets[active_loss]
+                active_loss = target.contiguous().view(-1) > 0
+                active_logits = logits.contiguous().view(-1, logits.size(-1)).squeeze(1)[active_loss]
 
-            binary_targets = active_targets.clone()
-            binary_targets[binary_targets > 0] = 1
+                active_targets = target.contiguous().view(-1) - 1
 
-            binary_loss = self.loss_function(active_logits, binary_targets)
+                active_targets = active_targets[active_loss]
 
-            loss = binary_loss
+                binary_targets = active_targets.clone()
+                binary_targets[binary_targets > 0] = 1
 
-            if test:
-                return loss, logits, logits
-            return loss
+                binary_loss = self.loss_function(active_logits, binary_targets)
+
+                loss = binary_loss
+
+                if test:
+                    return loss, logits
+                return loss
 
         else:
+            # use adaptive softmax (including standard softmax)
             if self.adaptive_softmax:
                 if test:
                     logits = self.dropout(self.decoder(hidden_state))
@@ -463,7 +530,8 @@ class TransformerHead(nn.Module):
                     hidden_state = hidden_state[masked_idx]
                     target = target[masked_idx]
 
-                loss = self.crit(hidden_state.contiguous().view(-1, hidden_state.contiguous().size(-1)), target.contiguous().view(-1), test)
+                loss = self.crit(hidden_state.contiguous().view(-1, hidden_state.contiguous().size(-1)),
+                                 target.contiguous().view(-1), test)
             else:
                 logits = self.dropout(self.decoder(hidden_state))
                 loss = self.loss_function(logits.contiguous().view(-1, logits.size(-1)), target.contiguous().view(-1))
@@ -471,7 +539,6 @@ class TransformerHead(nn.Module):
             if test:
                 return loss, logits
             return loss
-
 
 
 class TransformerModel(nn.Module):
@@ -498,16 +565,11 @@ class TransformerModel(nn.Module):
         self.output_pe = PositionalEmbedding(config.n_embd)
         self.output_wte = AdaptiveEmbedding(config.vocab_size, config.n_embd, config.n_ctx, config.cutoffs)
 
-
     def set_tied(self):
-        """ Make sure we are sharing the embeddings
-        """
         self.head.set_embeddings_weights(self.transformer.wte.weight)
 
-
     def init_weights(self, module):
-        """ Initialize the weights.
-        """
+
         if isinstance(module, (nn.Linear, nn.Embedding)):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
         elif isinstance(module, LayerNorm):
@@ -516,8 +578,8 @@ class TransformerModel(nn.Module):
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
 
-
-    def forward(self, input_ids, input_pos=None, lm_labels=None, embeddings=None, masked_idx=None, test=False, predict=False):
+    def forward(self, input_ids, input_pos=None, lm_labels=None, masked_idx=None, test=False,
+                predict=False):
 
         input_ids = input_ids.view(-1, input_ids.size(-1))
         inputs_embeds = self.wte(input_ids)
@@ -533,25 +595,27 @@ class TransformerModel(nn.Module):
         pos_seq = torch.arange(klen - 1, -1, -1.0, device=param.device)
         pos_emb = self.pe(pos_seq, bsz=input_ids.size(0))
 
-
         for block in self.enc_h:
             hidden_states, att = block(hidden_states, pos_emb)
 
         hidden_states = self.ln_f(hidden_states)
 
         if predict and self.config.classification:
-            logits = self.head(hidden_states, lm_labels, inputs_embeds, masked_idx, predict=predict)
+            logits = self.head(hidden_states, lm_labels, masked_idx, predict=predict)
             return logits
 
         if test:
             if self.config.classification:
-
-                loss, logits, embedding_logits = self.head(hidden_states, lm_labels, inputs_embeds, masked_idx, test=test)
-                return loss, logits, att
+                if self.config.crf:
+                    loss, logits, embedding_logits = self.head(hidden_states, lm_labels, masked_idx, test=test)
+                    return loss, logits, embedding_logits, att
+                else:
+                    loss, logits = self.head(hidden_states, lm_labels, masked_idx, test=test)
+                    return loss, logits, att
             else:
-                loss, logits = self.head(hidden_states, lm_labels, inputs_embeds, masked_idx, test=test)
+                loss, logits = self.head(hidden_states, lm_labels, masked_idx, test=test)
                 return loss, logits
-        loss = self.head(hidden_states, lm_labels, inputs_embeds, masked_idx, test=test)
+        loss = self.head(hidden_states, lm_labels, masked_idx, test=test)
 
         return loss
 
