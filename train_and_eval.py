@@ -348,7 +348,7 @@ def train_test(df_train, df_valid, df_test, args, stemmer, sp, folder=None):
             optimizer.step()
 
             train_step += 1
-            scheduler.step(train_step)
+            scheduler.step()
             if args.classification:
                 report_step = 32
             else:
@@ -498,12 +498,12 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
             input_batch_labels = batch_labels.clone()
 
             if not args.classification:
-                loss, logits = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, embeddings=None, masked_idx=mask, test=True)
+                loss, logits = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, masked_idx=mask, test=True)
             else:
                 if not args.crf:
-                    loss, logits, att_vector = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, embeddings=None, test=True)
+                    loss, logits, att_vector = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, test=True)
                 else:
-                    loss, logits, crf_preds, att_vector = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, embeddings=None, test=True)
+                    loss, logits, crf_preds, att_vector = model(encoder_words, input_pos=encoder_pos, lm_labels=input_batch_labels, test=True)
 
             loss = loss.mean()
             total_loss += batch_labels.size(0) * loss.float().item()
