@@ -489,9 +489,9 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
                 if args.POS_tags:
                     encoder_pos, _, _ = get_batch(data_pos, i, args, corpus.dictionary.word2idx, mask)
             else:
-                encoder_words, batch_labels = get_batch_docs(data, target, i)
+                encoder_words, batch_labels = get_batch_docs(data, target, i, args)
                 if args.POS_tags:
-                    encoder_pos, _ = get_batch_docs(data_pos, target, i)
+                    encoder_pos, _ = get_batch_docs(data_pos, target, i, args)
                 mask = None
 
 
