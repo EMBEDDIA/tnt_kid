@@ -10,6 +10,8 @@ from nltk.stem.porter import *
 
 
 def file_to_df(data_path):
+    print('-------------------------------------------------')
+    print('Reading the input file ', data_path)
     all_docs = []
     counter = 0
     num_words = 0
@@ -27,8 +29,10 @@ def file_to_df(data_path):
 
     df = pd.DataFrame(all_docs)
     df.columns = ["text"]
-    print(data_path, 'data size: ', df.shape)
-    print('Avg words: ', num_words / df.shape[0])
+    print('Num docs: ', df.shape[0])
+    print('Avg words per document: ', num_words / df.shape[0])
+    print('--------------------------------------------------')
+    print()
     return df
 
 
@@ -253,7 +257,7 @@ if __name__ == '__main__':
     parser.add_argument('--result_path', type=str, default='results/predictions.csv')
 
     parser.add_argument('--kw_cut', type=int, default=10, help='Max number of returned keywords')
-    parser.add_argument('--cuda', action='store_false', help='If true, unconditional generation.')
+    parser.add_argument('--cuda', action='store_true', help='If true, unconditional generation.')
     parser.add_argument("--seed", type=int, default=2019)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--n_ctx", type=int, default=256)
@@ -285,13 +289,16 @@ if __name__ == '__main__':
 
     model = loadModel(args.trained_classification_model, args)
     model.eval()
-
+    print('Starting keyword detection')
 
     predictions = predict(test_data, model, stemmer, sp)
     predictions = [";".join(kws) for kws in predictions]
     df_kw = pd.DataFrame(predictions, columns=['keywords'])
     df = pd.concat([df_test, df_kw], axis=1)
     df.to_csv(args.result_path, encoding='utf8', sep='\t')
+
+    print("Done, results written to ", args.result_path)
+
 
 
 

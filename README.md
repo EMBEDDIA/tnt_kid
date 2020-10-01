@@ -13,6 +13,10 @@ To only get the source code, clone the repository from github with 'git clone ht
 
 Install dependencies if needed: pip install -r requirements.txt
 
+### To extract keywords with the model trained on scientific texts (KP20k dataset): ###
+
+python predict.py --data_path data/example.json --bpe_model_path bpe/bpe_science.model --dict_path dictionaries/5_lm+bpe+rnn_science_adaptive_lm_bpe_nopos_rnn_nocrf.ptb --trained_classification_model trained_classification_models/model_5_lm+bpe+rnn_science_folder_kp20k.pt --adaptive --rnn --bpe --cuda
+
 ### To reproduce the results published in the paper run the code in the command line using following commands: ###
 
 Generate news and science datasets for language model training:<br/>
