@@ -132,11 +132,11 @@ class Corpus(object):
         else:
             if self.pos:
                 self.train, self.train_pos, self.train_target, self.train_keywords, self.train_stemmed_string = self.tokenize_doc(df_train, max_length=self.max_length)
-                self.valid, self.valid_pos, self.valid_target, self.valid_keywords, self.valid_stemmed_string = self.tokenize_doc(df_valid, max_length=self.max_length, valid=False)
+                self.valid, self.valid_pos, self.valid_target, self.valid_keywords, self.valid_stemmed_string = self.tokenize_doc(df_valid, max_length=self.max_length)
                 self.test, self.test_pos, self.test_target, self.test_keywords, self.test_stemmed_string = self.tokenize_doc(df_test, max_length=self.max_length)
             else:
                 self.train, self.train_target, self.train_keywords, self.train_stemmed_string = self.tokenize_doc(df_train, max_length=self.max_length)
-                self.valid, self.valid_target, self.valid_keywords, self.valid_stemmed_string = self.tokenize_doc(df_valid, max_length=self.max_length, valid=False)
+                self.valid, self.valid_target, self.valid_keywords, self.valid_stemmed_string = self.tokenize_doc(df_valid, max_length=self.max_length)
                 self.test, self.test_target, self.test_keywords, self.test_stemmed_string = self.tokenize_doc(df_test, max_length=self.max_length)
 
     def preprocess_line(self, line, pos):
@@ -252,7 +252,7 @@ class Corpus(object):
 
 
 
-    def tokenize_doc(self, df, max_length, valid=False):
+    def tokenize_doc(self, df, max_length):
 
         stemmer=PorterStemmer()
         stemmed_string = ""
@@ -285,6 +285,8 @@ class Corpus(object):
             else:
                 docs.append([words, tokenized_keywords])
 
+        docs = sorted(docs, key=lambda x: len(x[0]))
+
         x = torch.zeros([len(docs), max_length], dtype=torch.long)
         y = torch.zeros([len(docs), max_length], dtype=torch.long)
         if self.pos:
@@ -304,11 +306,6 @@ class Corpus(object):
                 words, pos_tags, kws = doc
             else:
                 words, kws = doc
-            if valid:
-                print(kws)
-                print(words)
-                if self.pos:
-                    print(pos_tags)
 
             length = len(words)
 
@@ -357,13 +354,8 @@ class Corpus(object):
                     if j < max_length:
                         x_pos[i][j] = idx
 
-            if valid:
-                print(x[i])
-                print(y[i])
-                if self.pos:
-                    print(x_pos[i])
-
-            key = "".join([str(idx) for idx in x[i].numpy()])
+            key = x[i].numpy()
+            key = "".join([str(idx) for idx in key if idx != 0])
 
             #remove keywords that don't appear
             num_all_kw = len(kws)
@@ -460,9 +452,23 @@ def batchify_docs(data, targets, bsz):
 
 
 def get_batch_docs(data, targets, i, config):
+    data_batch = data[i, :, :]
+    targets_batch = targets[i, :, :]
+    data_batch, targets_batch = truncate_to_longest_sequence_in_batch(data_batch, targets_batch)
     if config.cuda:
-        return data[i, :, :].cuda(), targets[i, :, :].cuda()
-    return data[i, :, :], targets[i, :, :]
+        return data_batch.cuda(), targets_batch.cuda()
+    return data_batch, targets_batch
+
+
+def truncate_to_longest_sequence_in_batch(data, targets):
+    zero_mask = data == 0
+    mask_zero_values, mask_zero_indices = torch.max(zero_mask, dim=1)
+    mask_zero_indices[mask_zero_values == 0] = zero_mask.size(1)
+    trunc_pos = torch.max(mask_zero_indices)
+    data = data[:,:trunc_pos]
+    targets = targets[:,:trunc_pos]
+    return data, targets
+
 
 
 

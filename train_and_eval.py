@@ -523,7 +523,7 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
                 true_y = []
 
                 for batch in encoder_words.cpu().numpy():
-                    key = "".join([str(x) for x in batch])
+                    key = "".join([str(x) for x in batch if x != 0])
                     true_example = keywords[key]
                     true_example = [" ".join(kw) for kw in true_example]
                     true_y.append(true_example)
@@ -708,8 +708,8 @@ if __name__ == '__main__':
     parser.add_argument("--layer_norm_epsilon", type=float, default=1e-6)
     parser.add_argument("--initializer_range", type=float, default=0.02)
 
-    parser.add_argument("--n_ctx", type=int, default=256)
-    parser.add_argument("--n_positions", type=int, default=256)
+    parser.add_argument("--n_ctx", type=int, default=512)
+    parser.add_argument("--n_positions", type=int, default=512)
     parser.add_argument("--n_embd", type=int, default=512)
     parser.add_argument("--n_head", type=int, default=8)
     parser.add_argument("--n_layer", type=int, default=8)
