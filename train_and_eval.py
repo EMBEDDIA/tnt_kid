@@ -127,7 +127,7 @@ def run_model(args):
 
     if not args.classification:
         df_data = file_to_df(os.path.join(args.data_path, args.lm_corpus_file), classification=False)
-        df_data = df_data.sample(frac=1, random_state=2019)
+        df_data = df_data.sample(frac=1, random_state=args.seed)
         val_idx = int(0.8 * df_data.shape[0])
         test_idx = int(0.9 * df_data.shape[0])
         df_train = df_data[:val_idx]
@@ -157,7 +157,7 @@ def run_model(args):
                 #cross validation
                 kf = model_selection.KFold(n_splits=10)
                 df_data = file_to_df(os.path.join(args.data_path, folder, folder + '_test.json'), classification=True)
-                df_data = df_data.sample(frac=1, random_state=2019)
+                df_data = df_data.sample(frac=1, random_state=args.seed)
                 print()
                 print('Cross validation')
 
@@ -186,7 +186,7 @@ def run_model(args):
 
             else:
                 df_train = file_to_df(os.path.join(args.data_path, folder, folder + '_valid.json'), classification=True)
-                df_train = df_train.sample(frac=1, random_state=2019)
+                df_train = df_train.sample(frac=1, random_state=args.seed)
                 val_idx = int(0.8 * df_train.shape[0])
                 df_valid = df_train[val_idx:]
                 df_train = df_train[:val_idx]
@@ -701,7 +701,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--cuda', action='store_true', help='If true, unconditional generation.')
 
-    parser.add_argument("--seed", type=int, default=2019)
+    parser.add_argument("--seed", type=int, default=2021)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument('--learning_rate', type=float, default=0.0003)
     parser.add_argument('--max_grad_norm', type=int, default=1)
