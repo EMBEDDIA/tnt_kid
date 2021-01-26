@@ -701,7 +701,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--cuda', action='store_true', help='If true, unconditional generation.')
 
-    parser.add_argument("--seed", type=int, default=2021)
+    parser.add_argument("--seed", type=int, default=2019)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument('--learning_rate', type=float, default=0.0003)
     parser.add_argument('--max_grad_norm', type=int, default=1)
