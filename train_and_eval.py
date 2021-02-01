@@ -630,7 +630,11 @@ def test(model, data, data_pos, target, corpus, args, stemmer, keywords=None, sp
                     punctuation = "!#$%&'()*+,.:;<=>?@[\]^_`{|}~"
 
                     for kw, prob in pred_example:
-                        kw_stem = " ".join([stemmer.stem(word) for word in kw.split()])
+                        if sp is not None:
+                            kw_decoded = sp.DecodePieces(kw.split())
+                            kw_stem = " ".join([stemmer.stem(word) for word in kw_decoded.split()])
+                        else:
+                            kw_stem = " ".join([stemmer.stem(word) for word in kw.split()])
                         kw_stems.append(kw_stem)
 
                         if kw_stem not in all_kw and len(kw_stem.split()) == len(set(kw_stem.split())):

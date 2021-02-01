@@ -253,6 +253,7 @@ class Corpus(object):
 
 
     def tokenize_doc(self, df, max_length):
+        special_tokens = ['<eos>', '<unk>', '<mask>', '<pad>']
 
         stemmer=PorterStemmer()
         stemmed_string = ""
@@ -310,34 +311,64 @@ class Corpus(object):
             length = len(words)
 
             kw_in_paper = []
-            stemmed_kw_in_paper = []
 
-
+            # print()
+            # print('-------------------------------------------------')
+            # print("Words: ", words)
+            # print("Keywords: ", kws)
             for j, word in enumerate(words):
-                if word in self.dictionary.word2idx:
-                    idx = self.dictionary.word2idx[word]
-
+                if word.startswith('▁') or not self.bpe:
                     for kw in kws:
                         lkw = len(kw)
-
                         is_keyword = False
-                        if j + lkw < length:
-                            for k in range(lkw):
-                                w = words[j + k]
+                        if j + lkw <= length and lkw > 0:
+                            combined_keyword = []
+                            combined_word = []
+                            whole_kw = False
+                            whole_word = False
+                            for k in range(length):
+                                if not whole_kw:
+                                    combined_keyword.append(kw[k])
+                                if not whole_word:
+                                    combined_word.append(words[j + k])
+                                if not whole_word:
+                                    if not self.bpe or j + k == length - 1 or words[j + k + 1].startswith('▁') or words[j + k + 1] in special_tokens:
+                                        # print(combined_word, words[j + k + 1], j, k)
+                                        if self.bpe:
+                                            combined_w = self.sp.DecodePieces(combined_word)
+                                        else:
+                                            combined_w = combined_word[0]
+                                        whole_word = True
+                                        combined_word = []
+                                if not whole_kw:
+                                    if not self.bpe or k == lkw - 1 or kw[k + 1].startswith('▁') or kw[k + 1] in special_tokens:
+                                        if self.bpe:
+                                            combined_kw = self.sp.DecodePieces(combined_keyword)
+                                        else:
+                                            combined_kw = combined_keyword[0]
+                                        whole_kw = True
+                                        combined_keyword = []
+                                if whole_kw and whole_word:
+                                    # print("Combined: ", combined_w, combined_kw, k + j)
+                                    stem_w = stemmer.stem(combined_w.lower())
+                                    stem_kw = stemmer.stem(combined_kw.lower())
+                                    whole_word = False
+                                    whole_kw = False
 
-                                if stemmer.stem(w.lower()) != stemmer.stem(kw[k].lower()):
-                                    break
-                            else:
-                                is_keyword = True
+                                    if stem_w != stem_kw:
+                                        break
+                                    else:
+                                        if k >= lkw - 1:
+                                            is_keyword = True
+                                            break
                         if is_keyword:
-
                             for k in range(lkw):
                                 if j + k < max_length:
                                     y[i][j + k] = lkw + 1 if lkw <= max_lkw else max_lkw + 1
-                            stemmed_kw = " ".join([stemmer.stem(w.lower()) for w in kw])
                             kw_in_paper.append(" ".join(kw))
-                            stemmed_kw_in_paper.append(stemmed_kw)
 
+                if word in self.dictionary.word2idx:
+                    idx = self.dictionary.word2idx[word]
                 else:
                     idx = self.dictionary.word2idx['<unk>']
                 if j < max_length:
