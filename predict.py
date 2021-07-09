@@ -257,7 +257,7 @@ if __name__ == '__main__':
     parser.add_argument('--bpe_model_path', type=str, help='Path to trained byte pair encoding model')
     parser.add_argument('--trained_classification_model', type=str, help='Path to pretrained classification model')
     parser.add_argument('--dict_path', type=str, help='Path to dictionary')
-    parser.add_argument('--result_path', type=str, default='results/predictions.csv')
+    parser.add_argument('--result_path', type=str, default='predictions.csv')
 
     parser.add_argument('--kw_cut', type=int, default=10, help='Max number of returned keywords')
     parser.add_argument('--cuda', action='store_true', help='If true, unconditional generation.')
