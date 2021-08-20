@@ -279,6 +279,10 @@ def train_test(df_train, df_valid, df_test, args, stemmer, sp, folder=None):
         model.config = args
     elif args.transfer_learning:
         print('Domain adaptation language modelling')
+        l_models = os.listdir(args.trained_language_models_dir)
+        for l_model in l_models:
+            if args.config_id in l_model:
+                args.language_model_path = os.path.join(args.trained_language_models_dir, l_model)
         model = torch.load(args.language_model_path)
         model.config = args
     else:
