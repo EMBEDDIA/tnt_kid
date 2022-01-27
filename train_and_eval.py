@@ -703,7 +703,7 @@ if __name__ == '__main__':
     parser.add_argument('--cv_eval', type=str, default='nus;duc', help='Names of dataset folders on which cross validation should be conducted divided by ;')
     parser.add_argument('--kw_cut', type=int, default=10, help='Max number of returned keywords')
 
-    parser.add_argument('--cuda', action='store_true', help='If true, unconditional generation.')
+    parser.add_argument('--cuda', action='store_true', help='If true, train on gpu.')
 
     parser.add_argument("--seed", type=int, default=2019)
     parser.add_argument("--batch_size", type=int, default=8)
