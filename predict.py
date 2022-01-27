@@ -260,7 +260,7 @@ if __name__ == '__main__':
     parser.add_argument('--result_path', type=str, default='predictions.csv')
 
     parser.add_argument('--kw_cut', type=int, default=10, help='Max number of returned keywords')
-    parser.add_argument('--cuda', action='store_true', help='If true, unconditional generation.')
+    parser.add_argument('--cuda', action='store_true', help='If true, predict on gpu.')
     parser.add_argument("--seed", type=int, default=2019)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--n_ctx", type=int, default=512)
