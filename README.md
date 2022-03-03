@@ -52,6 +52,35 @@ Train and test the keyword tagger on the datasets from the news domain:<br/>
 python train_and_eval.py --config_id 5_lm+bpe+rnn_news --bpe_model_path bpe/bpe_news.model --datasets 'kptimes;jptimes;duc' --classification --transfer_learning --rnn --bpe --cuda
 ```
 
+### Instructions for training the model on a new dataset: ###
+
+The dataset needs to be in the json line format, where each document in the dataset is a json file containing the keys "title", "abstract", and "keywords" (containing keywords separated by semi-column). Example:
+
+{"title": "Title of the text", "abstract": "abstract of the scientific paper or text of the news article ", "keywords": "kw1;kw2;kw2"}
+
+For bpe tokenizer training and language model training, the name of the dataset is arbitrary, but it should be put in the "data" folder. For example, if you named it as "new_dataset.json" then you can run the following commands:
+
+To train bpe tokenizer:
+
+```
+python bpe/bpe.py --input new_dataset.json --output new_dataset
+```
+
+To train language model:
+
+```
+python train_and_eval.py --config_id lm+bpe+rnn_new_dataset --lm_corpus_file new_dataset.json --bpe_model_path bpe/new_dataset.model --adaptive --rnn --bpe --cuda
+```
+
+For training of the keyword tagger, the dataset needs to be split into the train and test set and here the naming matters. An example that works would be to create a folder "new_dataset" in the "data" folder. 
+Name the train dataset as "new_dataset_valid.json" and the test dataset as "new_dataset_test.json" and put them in the folder "new_dataset". Note that there should be a match between the folder name and train and test datasets names (without the suffixes). 
+The suffix "_valid.json" tells the script that this is a train set and the suffix "_test.json" tells the script that this is the test set.
+
+Train and test the keyword tagger on the new dataset:<br/>
+```
+python train_and_eval.py --config_id lm+bpe+rnn_new_dataset --bpe_model_path bpe/new_dataset.model --datasets 'new_dataset' --classification --transfer_learning --rnn --bpe --cuda
+```
+
 ## Contributors to the code ##
 
 Matej Martinc<br/>
