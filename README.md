@@ -2,7 +2,7 @@
 
 Please cite the following paper [[bib](https://gitlab.com/matej.martinc/tnt_kid/-/blob/master/bibtex.js)] if you use this code:
 
-Matej Martinc, Blaz Skrlj and Senja Pollak. TNT-KID: Transformer-based Neural Tagger for Keyword Identification. arXiv preprint arXiv:2003.09166.
+Martinc, M., Škrlj, B., & Pollak, S. (2021). TNT-KID: Transformer-based neural tagger for keyword identification. Natural Language Engineering, 1-40. doi:10.1017/S1351324921000127
 
 
 ## Installation, documentation ##
