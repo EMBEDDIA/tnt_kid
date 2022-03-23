@@ -1,6 +1,8 @@
-@article{martinc2020tntkid,
-  title={TNT-KID: Transformer-based Neural Tagger for Keyword Identification},
-  author={Martinc, Matej and Skrlj, Blaz and Pollak, Senja},
-  journal={arXiv preprint arXiv:2003.09166},
-  year={2020}
+@article{martinc2020tnt,
+  title={{Tnt-kid: Transformer-based neural tagger for keyword identification}},
+  author={Martinc, Matej and {\v{S}}krlj, Bla{\v{z}} and Pollak, Senja},
+  journal={Natural Language Engineering},
+  pages={1--40},
+  year={2021},
+  publisher={Cambridge University Press}
 }
